@@ -21,6 +21,7 @@ var (
 	postFmt        = "https://hacker-news.firebaseio.com/v0/item/%v.json"
 	dataCache      map[int]Post
 	dataCacheMutex = sync.RWMutex{}
+	postLen        = 0
 )
 
 func fetchUrl(url string, retVal interface{}) (interface{}, error) {
@@ -113,23 +114,26 @@ func drawGrid() {
 	l.Title = "news.ycombinator.com"
 	l.Rows = []string{}
 	go func() {
-		ticker := time.NewTicker(time.Second).C
+		ticker := time.NewTicker(2 * time.Second).C
 		for {
-			l.Rows = []string{}
-			dataCacheMutex.Lock()
-			var ids []int
-			for id := range dataCache {
-				ids = append(ids, id)
-			}
-			sort.Ints(ids)
-			for _, id := range ids {
-				l.Rows = append(l.Rows, dataCache[id].Title)
-
-			}
-
-			dataCacheMutex.Unlock()
 			select {
 			case <-ticker:
+				l.Rows = []string{}
+				dataCacheMutex.Lock()
+				var ids []int
+				for id := range dataCache {
+					ids = append(ids, id)
+				}
+				if len(ids) == postLen {
+					break
+				}
+				sort.Ints(ids)
+				for _, id := range ids {
+					l.Rows = append(l.Rows, dataCache[id].Title)
+
+				}
+
+				dataCacheMutex.Unlock()
 			}
 
 		}
@@ -203,6 +207,7 @@ func drawGrid() {
 func main() {
 	dataCache = make(map[int]Post)
 	for i, post := range fetchTopPosts() {
+		postLen++
 		go fetchPost(i, post)
 	}
 	drawGrid()
