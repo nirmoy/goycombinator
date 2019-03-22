@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -18,8 +19,7 @@ import (
 var (
 	topPostUrl     = "https://hacker-news.firebaseio.com/v0/topstories.json"
 	postFmt        = "https://hacker-news.firebaseio.com/v0/item/%v.json"
-	dataChannel    chan string
-	dataCache      map[string]Post
+	dataCache      map[int]Post
 	dataCacheMutex = sync.RWMutex{}
 )
 
@@ -83,13 +83,12 @@ func fetchPost(id, postID int) {
 	if postsVal.(map[string]interface{})["url"] != nil {
 		postUrl = postsVal.(map[string]interface{})["url"].(string)
 		dataCacheMutex.Lock()
-		dataCache[fmt.Sprintf("[%d] %s", id, postStr)] = Post{
-			Title: postStr,
+		dataCache[id] = Post{
+			Title: fmt.Sprintf("[%d] %s", id, postStr),
 			Url:   postUrl,
 		}
 		dataCacheMutex.Unlock()
 	}
-	dataChannel <- fmt.Sprintf("[%d] %s", id, postStr)
 }
 
 func fetchTopPosts() []int {
@@ -114,10 +113,25 @@ func drawGrid() {
 	l.Title = "news.ycombinator.com"
 	l.Rows = []string{}
 	go func() {
+		ticker := time.NewTicker(time.Second).C
 		for {
+			l.Rows = []string{}
+			dataCacheMutex.Lock()
+			var ids []int
+			for id := range dataCache {
+				ids = append(ids, id)
+			}
+			sort.Ints(ids)
+			for _, id := range ids {
+				l.Rows = append(l.Rows, dataCache[id].Title)
 
-			post := <-dataChannel
-			l.Rows = append(l.Rows, post)
+			}
+
+			dataCacheMutex.Unlock()
+			select {
+			case <-ticker:
+			}
+
 		}
 	}()
 	l.TextStyle = ui.NewStyle(ui.ColorYellow)
@@ -161,9 +175,17 @@ func drawGrid() {
 			case "<Home>":
 				l.ScrollTop()
 			case "<Enter>":
-				openbrowser(dataCache[l.Rows[l.SelectedRow]].Url)
+				var id int
+				var title string
+				fmt.Sscanf(l.Rows[l.SelectedRow], "[%d] %s", &id, title)
+				openbrowser(dataCache[id].Url)
 			case "G", "<End>":
 				l.ScrollBottom()
+			case "<Resize>":
+				payload := e.Payload.(ui.Resize)
+				grid.SetRect(0, 0, payload.Width, payload.Height)
+				ui.Clear()
+				ui.Render(grid)
 			}
 
 			if previousKey == "g" {
@@ -179,8 +201,7 @@ func drawGrid() {
 	}
 }
 func main() {
-	dataChannel = make(chan string)
-	dataCache = make(map[string]Post)
+	dataCache = make(map[int]Post)
 	for i, post := range fetchTopPosts() {
 		go fetchPost(i, post)
 	}
