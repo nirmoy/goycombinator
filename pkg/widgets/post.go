@@ -3,9 +3,7 @@ package widgets
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -15,8 +13,7 @@ import (
 )
 
 var (
-	topPostUrl   = "https://hacker-news.firebaseio.com/v0/topstories.json"
-	commentMutex = sync.RWMutex{}
+	topPostUrl = "https://hacker-news.firebaseio.com/v0/topstories.json"
 )
 
 type PostWidget struct {
@@ -44,36 +41,6 @@ func NewPostWidget() *PostWidget {
 	}
 	postWidget.List.Title = "news.ycombinator.com"
 	return &postWidget
-}
-func (p *PostWidget) fetchUrl(url string, retVal interface{}) (interface{}, error) {
-
-	spaceClient := http.Client{
-		Timeout: time.Second * 2, // Maximum of 2 secs
-	}
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	//req.Header.Set("User-Agent", "spacecount-tutorial")
-
-	res, getErr := spaceClient.Do(req)
-	if getErr != nil {
-		return nil, getErr
-	}
-
-	body, readErr := ioutil.ReadAll(res.Body)
-	if readErr != nil {
-		return nil, readErr
-	}
-
-	jsonErr := json.Unmarshal(body, &retVal)
-	if jsonErr != nil {
-		return nil, jsonErr
-	}
-
-	return retVal, nil
 }
 
 func (p *PostWidget) UpdateComment() {
@@ -170,25 +137,9 @@ func (p *PostWidget) Update() {
 
 func (p *PostWidget) fetchPostUrl(url string) (Post, error) {
 	post := Post{}
-	spaceClient := http.Client{
-		Timeout: time.Second * 2, // Maximum of 2 secs
-	}
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	body, err := fetchUrlData(url)
 	if err != nil {
 		return Post{}, err
-	}
-
-	//req.Header.Set("User-Agent", "spacecount-tutorial")
-
-	res, getErr := spaceClient.Do(req)
-	if getErr != nil {
-		return Post{}, getErr
-	}
-
-	body, readErr := ioutil.ReadAll(res.Body)
-	if readErr != nil {
-		return Post{}, readErr
 	}
 
 	jsonErr := json.Unmarshal(body, &post)
@@ -213,12 +164,13 @@ func (p *PostWidget) FetchPost(id, postID int) {
 }
 
 func (p *PostWidget) FetchTopPosts() []int {
-	var posts []interface{}
-	tempVal, _ := p.fetchUrl(topPostUrl, posts)
-	postsVal := tempVal.([]interface{})
-	intposts := make([]int, len(postsVal))
-	for i := range postsVal {
-		intposts[i] = int(postsVal[i].(float64))
+	post := []int{}
+
+	body, _ := fetchUrlData(topPostUrl)
+	jsonErr := json.Unmarshal(body, &post)
+	if jsonErr != nil {
+		return nil
 	}
-	return intposts
+	p.PostLen = len(post)
+	return post
 }
