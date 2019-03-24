@@ -5,12 +5,11 @@ import (
 )
 
 func main() {
-	commentWidget := wid.NewCommentWidget()
 	postWidget := wid.NewPostWidget()
 	for i, post := range postWidget.FetchTopPosts() {
 		postWidget.PostLen++
 		go postWidget.FetchPost(i, post)
 	}
 	go postWidget.Update()
-	postWidget.DrawGrid(commentWidget)
+	postWidget.Draw()
 }

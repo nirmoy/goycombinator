@@ -21,6 +21,7 @@ var (
 
 type PostWidget struct {
 	List           *widgets.List
+	Comment        *CommentWidget
 	mutex          sync.RWMutex
 	DataCache      map[int]Post
 	DataCacheMutex sync.RWMutex
@@ -36,6 +37,7 @@ type Post struct {
 func NewPostWidget() *PostWidget {
 	postWidget := PostWidget{
 		List:           widgets.NewList(),
+		Comment:        NewCommentWidget(),
 		DataCache:      map[int]Post{},
 		DataCacheMutex: sync.RWMutex{},
 		PostLen:        0,
@@ -73,7 +75,16 @@ func (p *PostWidget) fetchUrl(url string, retVal interface{}) (interface{}, erro
 
 	return retVal, nil
 }
-func (p *PostWidget) DrawGrid(comment *CommentWidget) {
+
+func (p *PostWidget) UpdateComment() {
+	var id int
+	var title string
+	fmt.Sscanf(p.List.Rows[p.List.SelectedRow], "[%d] %s", &id, title)
+	go p.Comment.UpdateComment(p.DataCache[id].Kids)
+
+}
+
+func (p *PostWidget) Draw() {
 	if err := ui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v", err)
 	}
@@ -88,7 +99,7 @@ func (p *PostWidget) DrawGrid(comment *CommentWidget) {
 	grid.Set(
 		ui.NewRow(1.0,
 			ui.NewCol(1.0/2, p.List),
-			ui.NewCol(1.0/2, comment.List),
+			ui.NewCol(1.0/2, p.Comment.List),
 		),
 	)
 	ui.Render(grid)
@@ -103,17 +114,10 @@ func (p *PostWidget) DrawGrid(comment *CommentWidget) {
 				return
 			case "j", "<Down>":
 				p.List.ScrollDown()
-				var id int
-				var title string
-				fmt.Sscanf(p.List.Rows[p.List.SelectedRow], "[%d] %s", &id, title)
-				go comment.UpdateComment(p.DataCache[id].Kids)
+				p.UpdateComment()
 			case "k", "<Up>":
 				p.List.ScrollUp()
-				/*
-					var id int
-					var title string
-					fmt.Sscanf(l.Rows[l.SelectedRow], "[%d] %s", &id, title)
-					//go updateComment(comment, dataCache[id].Kids)*/
+				p.UpdateComment()
 			case "<Home>":
 				p.List.ScrollTop()
 			case "<Enter>":
